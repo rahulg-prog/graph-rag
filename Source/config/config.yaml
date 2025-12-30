@@ -4,4 +4,9 @@ data_source:
     pdf_path: data\raw_data\data.pdf
   normalized_data:
     unstructured_text_path: data\normalized_data\data.md
-    structured_text_path: data\normalized_data\clean_data.md
+    structured_text_path: 
+      volume_1: data\normalized_data\clean_data_volume_1.md
+      volume_2: data\normalized_data\clean_data_volume_2.md
+  jsonified_data:
+    volume_1: data\jsonified_data\volume_1.json
+    volume_2: data\jsonified_data\volume_2.json
