@@ -1,0 +1,22 @@
+#data ingestion config
+data_source:
+  pdf_path: Source\Data\raw_data\EPF_compliance.pdf
+  docx_path: Source\Data\raw_data\EPF_compliance.docx
+
+#data chunking config
+data_chunking:
+  recursive_text_splitter:
+    chunk_size: 1500
+    chunk_overlap: 500
+
+#embed_and_persist config
+embedding:
+  model: "text-embedding-3-small"
+
+vector_database:
+  persist_directory: Source\Data\vector_databases
+
+#retrieval config
+retriever:
+  vector_database_directory: Source\Data\vector_databases
+  top_k: 3
