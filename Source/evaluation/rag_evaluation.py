@@ -4,16 +4,23 @@ from typing_extensions import TypedDict, Annotated
 
 client = Client()
 
-# -------------------------
-# Correctness evaluator
-# -------------------------
+# ======================================================
+# 1. CORRECTNESS (uses reference_outputs)
+# ======================================================
 class CorrectnessGrade(TypedDict):
-    explanation: Annotated[str, "Explain reasoning"]
+    explanation: Annotated[str, "Explanation"]
     correct: Annotated[bool, "True if answer is correct"]
 
-correctness_prompt = """You are a teacher grading a quiz.
-Grade the STUDENT ANSWER based only on factual accuracy relative to the GROUND TRUTH ANSWER.
-Explain your reasoning step by step."""
+CORRECTNESS_PROMPT = """You are a strict grader.
+
+Given:
+- QUESTION
+- GROUND TRUTH ANSWER
+- STUDENT ANSWER
+
+Judge ONLY factual correctness relative to the ground truth.
+Explain your reasoning step by step.
+"""
 
 correctness_llm = ChatOpenAI(
     model="gpt-4o",
@@ -25,27 +32,39 @@ correctness_llm = ChatOpenAI(
 )
 
 def correctness(inputs: dict, outputs: dict, reference_outputs: dict) -> bool:
-    text = f"""
-QUESTION: {inputs['question']}
-GROUND TRUTH ANSWER: {reference_outputs['answer']}
-STUDENT ANSWER: {outputs['answer']}
+    assert reference_outputs is not None, "Missing ground truth"
+
+    prompt = f"""
+QUESTION:
+{inputs['question']}
+
+GROUND TRUTH ANSWER:
+{reference_outputs['answer']}
+
+STUDENT ANSWER:
+{outputs['answer']}
 """
+
     grade = correctness_llm.invoke([
-        {"role": "system", "content": correctness_prompt},
-        {"role": "user", "content": text},
+        {"role": "system", "content": CORRECTNESS_PROMPT},
+        {"role": "user", "content": prompt},
     ])
+
     return grade["correct"]
 
 
-# -------------------------
-# Relevance evaluator
-# -------------------------
+# ======================================================
+# 2. RELEVANCE (answer vs question)
+# ======================================================
 class RelevanceGrade(TypedDict):
-    explanation: Annotated[str, "Explain reasoning"]
+    explanation: Annotated[str, "Explanation"]
     relevant: Annotated[bool, "Answer addresses the question"]
 
-relevance_prompt = """You are a teacher grading a quiz.
-Determine whether the STUDENT ANSWER is concise and relevant to the QUESTION."""
+RELEVANCE_PROMPT = """You are grading relevance.
+
+Determine whether the STUDENT ANSWER directly and concisely
+addresses the QUESTION.
+"""
 
 relevance_llm = ChatOpenAI(
     model="gpt-4o",
@@ -57,26 +76,34 @@ relevance_llm = ChatOpenAI(
 )
 
 def relevance(inputs: dict, outputs: dict) -> bool:
-    text = f"""
-QUESTION: {inputs['question']}
-STUDENT ANSWER: {outputs['answer']}
+    prompt = f"""
+QUESTION:
+{inputs['question']}
+
+STUDENT ANSWER:
+{outputs['answer']}
 """
+
     grade = relevance_llm.invoke([
-        {"role": "system", "content": relevance_prompt},
-        {"role": "user", "content": text},
+        {"role": "system", "content": RELEVANCE_PROMPT},
+        {"role": "user", "content": prompt},
     ])
+
     return grade["relevant"]
 
 
-# -------------------------
-# Groundedness evaluator
-# -------------------------
+# ======================================================
+# 3. GROUNDEDNESS (answer vs retrieved docs)
+# ======================================================
 class GroundedGrade(TypedDict):
-    explanation: Annotated[str, "Explain reasoning"]
-    grounded: Annotated[bool, "Answer grounded in documents"]
+    explanation: Annotated[str, "Explanation"]
+    grounded: Annotated[bool, "Answer supported by documents"]
 
-grounded_prompt = """You are a teacher grading a quiz.
-Determine whether the STUDENT ANSWER is fully supported by the FACTS."""
+GROUNDED_PROMPT = """You are grading groundedness.
+
+Determine whether the STUDENT ANSWER is fully supported
+by the provided FACTS and contains no hallucinations.
+"""
 
 grounded_llm = ChatOpenAI(
     model="gpt-4o",
@@ -88,30 +115,36 @@ grounded_llm = ChatOpenAI(
 )
 
 def groundedness(inputs: dict, outputs: dict) -> bool:
-    docs = "\n\n".join(doc.page_content for doc in outputs["documents"])
-    text = f"""
+    docs_text = "\n\n".join(doc.page_content for doc in outputs["documents"])
+
+    prompt = f"""
 FACTS:
-{docs}
+{docs_text}
 
 STUDENT ANSWER:
 {outputs['answer']}
 """
+
     grade = grounded_llm.invoke([
-        {"role": "system", "content": grounded_prompt},
-        {"role": "user", "content": text},
+        {"role": "system", "content": GROUNDED_PROMPT},
+        {"role": "user", "content": prompt},
     ])
+
     return grade["grounded"]
 
 
-# -------------------------
-# Retrieval relevance evaluator
-# -------------------------
+# ======================================================
+# 4. RETRIEVAL RELEVANCE (docs vs question)
+# ======================================================
 class RetrievalRelevanceGrade(TypedDict):
-    explanation: Annotated[str, "Explain reasoning"]
+    explanation: Annotated[str, "Explanation"]
     relevant: Annotated[bool, "Docs relevant to question"]
 
-retrieval_prompt = """You are a teacher grading a quiz.
-Determine whether the FACTS are relevant to the QUESTION."""
+RETRIEVAL_PROMPT = """You are grading document relevance.
+
+Determine whether the retrieved FACTS are relevant
+to answering the QUESTION.
+"""
 
 retrieval_llm = ChatOpenAI(
     model="gpt-4o",
@@ -123,33 +156,38 @@ retrieval_llm = ChatOpenAI(
 )
 
 def retrieval_relevance(inputs: dict, outputs: dict) -> bool:
-    docs = "\n\n".join(doc.page_content for doc in outputs["documents"])
-    text = f"""
-QUESTION: {inputs['question']}
+    docs_text = "\n\n".join(doc.page_content for doc in outputs["documents"])
+
+    prompt = f"""
+QUESTION:
+{inputs['question']}
+
 FACTS:
-{docs}
+{docs_text}
 """
+
     grade = retrieval_llm.invoke([
-        {"role": "system", "content": retrieval_prompt},
-        {"role": "user", "content": text},
+        {"role": "system", "content": RETRIEVAL_PROMPT},
+        {"role": "user", "content": prompt},
     ])
+
     return grade["relevant"]
 
 
-# -------------------------
-# Run evaluation
-# -------------------------
+# ======================================================
+# RUN EVALUATION
+# ======================================================
 def target(inputs: dict) -> dict:
     return rag_bot(inputs["question"])
 
 client.evaluate(
     target,
-    data="Lilian Weng Blogs Q&A",
+    data="YOUR_DATASET_NAME",
     evaluators=[
         correctness,
         relevance,
         groundedness,
         retrieval_relevance,
     ],
-    experiment_prefix="rag-eval",
+    experiment_prefix="rag-full-eval",
 )
