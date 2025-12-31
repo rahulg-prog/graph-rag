@@ -20,7 +20,7 @@ embeddings = OpenAIEmbeddings(
 )
 
 loaded_vector_store = FAISS.load_local(
-    f"C:/vscode/graph-rag/Source/data/vector_store",
+    config["retriever"]["vector_store_path"],
     embeddings,
     allow_dangerous_deserialization=True
 )
@@ -45,7 +45,7 @@ def get_documents(query: str) -> str:
         "chunk_overlap": config["chunking"]["chunk_overlap"],
         "search_type": config["retriever"]["search_type"],
         "top_k": config["retriever"]["k"],
-        "vector_store": "FAISS"
+        "vector_store": config["retriever"]["vector_store_path"]
     }
 )
 def chat(query: str) -> str:
@@ -56,18 +56,29 @@ def chat(query: str) -> str:
     )
     
     prompt = PromptTemplate(
-        template="""You are an helpful assistant who is well versed with fall and decline of roman empire. Answer the question based solely on the provided context.
-        Use only relevant information from the context to answer the question and ignore the irrelevant parts. 
-        Do not use anything like  authors perspective or the text says just provide the answer based on the context.
+        template="""You are a historical assistant specializing in the Roman Empire.
 
-        Context:
-        {context}
+    Answer the question using ONLY information that is explicitly stated in the provided context.
+    Ignore any context that does not directly help answer the question.
 
-        Question: {question}
+    Requirements:
+    - Base every claim on concrete details from the context (e.g., practices, locations, roles, deployments).
+    - Prefer specific examples over general statements.
+    - Do NOT introduce people, events, or interpretations that are not clearly supported by the context.
+    - Do NOT generalize beyond what the context shows.
+    - Do NOT mention context numbers, the author, or phrases like "the text says".
+    - Write a clear, factual paragraph that directly answers the question.
 
-        Answer:""",
-                input_variables=["context", "question"]
-            )
+    Context:
+    {context}
+
+    Question:
+    {question}
+
+    Answer:""",
+        input_variables=["context", "question"]
+    )
+
     
     rag_chain = (
         {
@@ -83,6 +94,6 @@ def chat(query: str) -> str:
     return response
 
 if __name__ == "__main__":
-    user_query = "How does the author argue that Roman persecution of early Christians was driven more by concerns for public order, political stability, and social conformity than by consistent religious hatred, and what evidence does he use to support this interpretation?"
+    user_query = "How does the author use the discipline, organization, and geographic deployment of the Roman military to explain the stability and longevity of imperial control during the age of the Antonines?"
     answer = chat(user_query)
     print("Answer:", answer)

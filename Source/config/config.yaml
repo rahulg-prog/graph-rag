@@ -15,15 +15,15 @@ data_source:
 #data chunking and embedding config
 chunking:
   chunk_size: 450
-  chunk_overlap: 30
+  chunk_overlap: 0
 embedding:
   embedding_model: "text-embedding-3-small"
 
 #retriever config
 retriever:
-  vector_store_path: "data/vector_store"
-  search_type: "similarity"
-  k: 5
+  vector_store_path: "C:/vscode/graph-rag/Source/data/vector_stores/chunk_size_1000"
+  search_type: "mmr"
+  k: 15
 
 #LLM config
 llm:
