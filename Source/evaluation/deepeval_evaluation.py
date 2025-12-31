@@ -9,7 +9,6 @@ from deepeval.metrics import (
 )
 from deepeval.test_case import LLMTestCase
 
-
 class RetrieverEvaluator:
     def __init__(self, csv_path: str):
         self.csv_path = csv_path

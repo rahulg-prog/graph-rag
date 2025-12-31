@@ -28,3 +28,8 @@ retriever:
 #LLM config
 llm:
   model_name: "gpt-4.1-nano"
+
+#evaluation config
+evaluation:
+  ground_truth_path: evaluation\ground_truth\ground_truth.jsonl
+  output_path: evaluation\results\evaluation_results.json

@@ -93,7 +93,89 @@ def chat(query: str) -> str:
     response = rag_chain.invoke({"question": query})
     return response
 
+import json
+from typing import List, Dict
+
+def evaluate(jsonl_path: str, output_json_path: str = "evaluation/evaluation_results.json") -> List[Dict]:
+    """
+    Reads a JSONL file, processes it through the RAG pipeline, and saves evaluation data to JSON.
+    
+    Args:
+        jsonl_path: Path to the JSONL file containing ground truth data
+        output_json_path: Path where the evaluation results JSON will be saved
+        
+    Returns:
+        List of dictionaries with the format:
+        {
+            "input": str,
+            "actual_output": str,
+            "expected_output": str,
+            "retrieval_context": List[str]
+        }
+    """
+    evaluation_data = []
+    llm = ChatOpenAI(
+        model=config["llm"]["model_name"],
+        api_key=os.getenv("OPENAI_API_KEY")
+    )
+    prompt = PromptTemplate(
+        template="""You are a historical assistant specializing in the Roman Empire.
+
+    Answer the question using ONLY information that is explicitly stated in the provided context.
+    Ignore any context that does not directly help answer the question.
+
+    Requirements:
+    - Base every claim on concrete details from the context (e.g., practices, locations, roles, deployments).
+    - Prefer specific examples over general statements.
+    - Do NOT introduce people, events, or interpretations that are not clearly supported by the context.
+    - Do NOT generalize beyond what the context shows.
+    - Do NOT mention context numbers, the author, or phrases like "the text says".
+    - Write a clear, factual paragraph that directly answers the question.
+
+    Context:
+    {context}
+
+    Question:
+    {question}
+
+    Answer:""",
+        input_variables=["context", "question"]
+    )
+    rag_chain = (
+        {
+            "context": lambda x: get_documents(x["question"]),
+            "question": RunnablePassthrough()
+        }
+        | prompt
+        | llm
+        | StrOutputParser()
+    )
+    with open(jsonl_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            item = json.loads(line.strip())
+            question = item["inputs"]["question"]
+            docs = retriever.invoke(question)
+            retrieval_context = [doc.page_content for doc in docs]
+            actual_output = rag_chain.invoke({"question": question})
+            expected_output = item["outputs"]["answer"]
+            eval_point = {
+                "input": question,
+                "actual_output": actual_output,
+                "expected_output": expected_output,
+                "retrieval_context": retrieval_context
+            }
+            evaluation_data.append(eval_point)
+    
+    # Save to JSON file
+    with open(output_json_path, 'w', encoding='utf-8') as f:
+        json.dump(evaluation_data, f, ensure_ascii=False, indent=2)
+    
+    print(f"Evaluation results saved to {output_json_path}")
+    return evaluation_data
+
 if __name__ == "__main__":
-    user_query = "How does the author use the discipline, organization, and geographic deployment of the Roman military to explain the stability and longevity of imperial control during the age of the Antonines?"
-    answer = chat(user_query)
-    print("Answer:", answer)
+    eval_results = evaluate(
+        "evaluation/ground_truth/ground_truth.jsonl",
+        "evaluation/evaluation_results.json"
+    )
+    print(f"Processed {len(eval_results)} questions")
