@@ -31,5 +31,6 @@ llm:
 
 #evaluation config
 evaluation:
-  ground_truth_path: C:\vscode\graph-rag\Source\evaluation\ground_truth\ground_truth.jsonl
-  output_path: C:/vscode/graph-rag/evaluation/results/evaluation_results.json
+  ground_truth_path: C:/vscode/graph-rag/Source/evaluation/ground_truth/ground_truth.jsonl
+  output_path: C:\vscode\graph-rag\Source\evaluation\results\evaluation_outputs.json
+  evaluation_csv: C:\vscode\graph-rag\Source\evaluation\results\evaluation_results.csv

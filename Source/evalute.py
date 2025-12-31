@@ -9,7 +9,7 @@ from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
-from Source.evaluation.deepeval_evaluation import RetrieverEvaluator
+from evaluation.deepeval_evaluation import RetrieverEvaluator
 
 load_dotenv()
 config = load_config("config/config.yaml")
@@ -103,6 +103,24 @@ def evaluate_single_question(question: str, expected_output: str, question_idx: 
     return eval_point
 
 
+def run_deepeval_metrics(json_path: str, csv_path: str = None):
+    if csv_path is None:
+        csv_path = json_path.replace('.json', '_deepeval.csv')
+    
+    with open(json_path, 'r', encoding='utf-8') as f:
+        evaluation_data = json.load(f)
+    
+    print(f"\n🔍 Running DeepEval metrics on {len(evaluation_data)} questions...")
+    evaluator = RetrieverEvaluator(csv_path)
+    
+    for idx, eval_point in enumerate(evaluation_data, 1):
+        print(f"Evaluating with DeepEval {idx}/{len(evaluation_data)}...")
+        evaluator.evaluate(eval_point)
+    
+    print(f"✓ DeepEval results saved to {csv_path}")
+    return csv_path
+
+
 def evaluate(
     jsonl_path: str = None, 
     output_json_path: str = None
@@ -136,4 +154,10 @@ def evaluate(
     return evaluation_data
 
 if __name__ == "__main__":
-    eval_results = evaluate()
+    run_evaluation = False
+    
+    if run_evaluation:
+        eval_results = evaluate()
+    
+    json_path = config["evaluation"]["output_path"]
+    run_deepeval_metrics(json_path=json_path, csv_path=config["evaluation"]["evaluation_csv"])
