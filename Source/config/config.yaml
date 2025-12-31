@@ -24,3 +24,7 @@ retriever:
   vector_store_path: "data/vector_store"
   search_type: "mmr"
   k: 5
+
+#LLM config
+llm:
+  model_name: "gpt-4o"
