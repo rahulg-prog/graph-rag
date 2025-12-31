@@ -3,7 +3,9 @@ import json
 from deepeval.metrics import (
     ContextualPrecisionMetric,
     ContextualRecallMetric,
-    ContextualRelevancyMetric
+    ContextualRelevancyMetric,
+    AnswerRelevancyMetric,
+    FaithfulnessMetric
 )
 from deepeval.test_case import LLMTestCase
 
@@ -13,9 +15,11 @@ class RetrieverEvaluator:
         self.csv_path = csv_path
 
         self.metrics = {
-            "contextual_precision": ContextualPrecisionMetric(),
-            "contextual_recall": ContextualRecallMetric(),
-            "contextual_relevancy": ContextualRelevancyMetric(),
+            "contextual_precision": ContextualPrecisionMetric(), #retrieval evaluation
+            "contextual_recall": ContextualRecallMetric(), #retrieval evaluation
+            "contextual_relevancy": ContextualRelevancyMetric(), #retrieval evaluation
+            "answer_relevancy": AnswerRelevancyMetric(), #generation evaluation
+            "faithfulness": FaithfulnessMetric(), #generation evaluation
         }
 
         # Write CSV header
