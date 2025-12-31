@@ -26,9 +26,6 @@ class RetrieverEvaluator:
             writer = csv.writer(f)
             writer.writerow([
                 "input",
-                "actual_output",
-                "expected_output",
-                "retrieval_context",
                 "metric",
                 "score",
                 "reason",

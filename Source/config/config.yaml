@@ -21,7 +21,7 @@ embedding:
 
 #retriever config
 retriever:
-  vector_store_path: "C:/vscode/graph-rag/Source/data/vector_stores/chunk_size_1000"
+  vector_store_path: C:\vscode\graph-rag\Source\data\vector_store
   search_type: "mmr"
   k: 15
 
