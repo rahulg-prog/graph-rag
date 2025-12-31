@@ -8,171 +8,148 @@ client = Client()
 # 1. CORRECTNESS (uses reference_outputs)
 # ======================================================
 class CorrectnessGrade(TypedDict):
-    explanation: Annotated[str, "Explanation"]
-    correct: Annotated[bool, "True if answer is correct"]
+    explanation: Annotated[str, ..., "Explain your reasoning for the score"]
+    correct: Annotated[bool, ..., "True if the answer is correct, False otherwise."]
 
-CORRECTNESS_PROMPT = """You are a strict grader.
+# Grade prompt
+correctness_instructions = """You are a teacher grading a quiz. You will be given a QUESTION, the GROUND TRUTH (correct) ANSWER, and the STUDENT ANSWER. Here is the grade criteria to follow:
+(1) Grade the student answers based ONLY on their factual accuracy relative to the ground truth answer. (2) Ensure that the student answer does not contain any conflicting statements.
+(3) It is OK if the student answer contains more information than the ground truth answer, as long as it is factually accurate relative to the  ground truth answer.
 
-Given:
-- QUESTION
-- GROUND TRUTH ANSWER
-- STUDENT ANSWER
+Correctness:
+A correctness value of True means that the student's answer meets all of the criteria.
+A correctness value of False means that the student's answer does not meet all of the criteria.
 
-Judge ONLY factual correctness relative to the ground truth.
-Explain your reasoning step by step.
-"""
+Explain your reasoning in a step-by-step manner to ensure your reasoning and conclusion are correct. Avoid simply stating the correct answer at the outset."""
 
-correctness_llm = ChatOpenAI(
-    model="gpt-4o",
-    temperature=0
-).with_structured_output(
-    CorrectnessGrade,
-    method="json_schema",
-    strict=True
+# Grader LLM
+grader_llm = ChatOpenAI(model="gpt-4o", temperature=0).with_structured_output(
+    CorrectnessGrade, method="json_schema", strict=True
 )
 
 def correctness(inputs: dict, outputs: dict, reference_outputs: dict) -> bool:
-    assert reference_outputs is not None, "Missing ground truth"
-
-    prompt = f"""
-QUESTION:
-{inputs['question']}
-
-GROUND TRUTH ANSWER:
-{reference_outputs['answer']}
-
-STUDENT ANSWER:
-{outputs['answer']}
-"""
-
-    grade = correctness_llm.invoke([
-        {"role": "system", "content": CORRECTNESS_PROMPT},
-        {"role": "user", "content": prompt},
+    """An evaluator for RAG answer accuracy"""
+    answers = f"""\
+QUESTION: {inputs['question']}
+GROUND TRUTH ANSWER: {reference_outputs['answer']}
+STUDENT ANSWER: {outputs['answer']}"""
+    # Run evaluator
+    grade = grader_llm.invoke([
+        {"role": "system", "content": correctness_instructions},
+        {"role": "user", "content": answers}
     ])
-
     return grade["correct"]
-
 
 # ======================================================
 # 2. RELEVANCE (answer vs question)
 # ======================================================
+# Grade output schema
 class RelevanceGrade(TypedDict):
-    explanation: Annotated[str, "Explanation"]
-    relevant: Annotated[bool, "Answer addresses the question"]
+    explanation: Annotated[str, ..., "Explain your reasoning for the score"]
+    relevant: Annotated[
+        bool, ..., "Provide the score on whether the answer addresses the question"
+    ]
 
-RELEVANCE_PROMPT = """You are grading relevance.
+# Grade prompt
+relevance_instructions = """You are a teacher grading a quiz. You will be given a QUESTION and a STUDENT ANSWER. Here is the grade criteria to follow:
+(1) Ensure the STUDENT ANSWER is concise and relevant to the QUESTION
+(2) Ensure the STUDENT ANSWER helps to answer the QUESTION
 
-Determine whether the STUDENT ANSWER directly and concisely
-addresses the QUESTION.
-"""
+Relevance:
+A relevance value of True means that the student's answer meets all of the criteria.
+A relevance value of False means that the student's answer does not meet all of the criteria.
 
-relevance_llm = ChatOpenAI(
-    model="gpt-4o",
-    temperature=0
-).with_structured_output(
-    RelevanceGrade,
-    method="json_schema",
-    strict=True
+Explain your reasoning in a step-by-step manner to ensure your reasoning and conclusion are correct. Avoid simply stating the correct answer at the outset."""
+
+# Grader LLM
+relevance_llm = ChatOpenAI(model="gpt-4o", temperature=0).with_structured_output(
+    RelevanceGrade, method="json_schema", strict=True
 )
 
+# Evaluator
 def relevance(inputs: dict, outputs: dict) -> bool:
-    prompt = f"""
-QUESTION:
-{inputs['question']}
-
-STUDENT ANSWER:
-{outputs['answer']}
-"""
-
+    """A simple evaluator for RAG answer helpfulness."""
+    answer = f"QUESTION: {inputs['question']}\nSTUDENT ANSWER: {outputs['answer']}"
     grade = relevance_llm.invoke([
-        {"role": "system", "content": RELEVANCE_PROMPT},
-        {"role": "user", "content": prompt},
+        {"role": "system", "content": relevance_instructions},
+        {"role": "user", "content": answer}
     ])
-
     return grade["relevant"]
-
 
 # ======================================================
 # 3. GROUNDEDNESS (answer vs retrieved docs)
 # ======================================================
+# Grade output schema
 class GroundedGrade(TypedDict):
-    explanation: Annotated[str, "Explanation"]
-    grounded: Annotated[bool, "Answer supported by documents"]
+    explanation: Annotated[str, ..., "Explain your reasoning for the score"]
+    grounded: Annotated[
+        bool, ..., "Provide the score on if the answer hallucinates from the documents"
+    ]
 
-GROUNDED_PROMPT = """You are grading groundedness.
+# Grade prompt
+grounded_instructions = """You are a teacher grading a quiz. You will be given FACTS and a STUDENT ANSWER. Here is the grade criteria to follow:
+(1) Ensure the STUDENT ANSWER is grounded in the FACTS. (2) Ensure the STUDENT ANSWER does not contain "hallucinated" information outside the scope of the FACTS.
 
-Determine whether the STUDENT ANSWER is fully supported
-by the provided FACTS and contains no hallucinations.
-"""
+Grounded:
+A grounded value of True means that the student's answer meets all of the criteria.
+A grounded value of False means that the student's answer does not meet all of the criteria.
 
-grounded_llm = ChatOpenAI(
-    model="gpt-4o",
-    temperature=0
-).with_structured_output(
-    GroundedGrade,
-    method="json_schema",
-    strict=True
+Explain your reasoning in a step-by-step manner to ensure your reasoning and conclusion are correct. Avoid simply stating the correct answer at the outset."""
+
+# Grader LLM
+grounded_llm = ChatOpenAI(model="gpt-4o", temperature=0).with_structured_output(
+    GroundedGrade, method="json_schema", strict=True
 )
 
+# Evaluator
 def groundedness(inputs: dict, outputs: dict) -> bool:
-    docs_text = "\n\n".join(doc.page_content for doc in outputs["documents"])
-
-    prompt = f"""
-FACTS:
-{docs_text}
-
-STUDENT ANSWER:
-{outputs['answer']}
-"""
-
+    """A simple evaluator for RAG answer groundedness."""
+    doc_string = "\n\n".join(doc.page_content for doc in outputs["documents"])
+    answer = f"FACTS: {doc_string}\nSTUDENT ANSWER: {outputs['answer']}"
     grade = grounded_llm.invoke([
-        {"role": "system", "content": GROUNDED_PROMPT},
-        {"role": "user", "content": prompt},
+        {"role": "system", "content": grounded_instructions},
+        {"role": "user", "content": answer}
     ])
-
     return grade["grounded"]
-
 
 # ======================================================
 # 4. RETRIEVAL RELEVANCE (docs vs question)
 # ======================================================
 class RetrievalRelevanceGrade(TypedDict):
-    explanation: Annotated[str, "Explanation"]
-    relevant: Annotated[bool, "Docs relevant to question"]
+    explanation: Annotated[str, ..., "Explain your reasoning for the score"]
+    relevant: Annotated[
+        bool,
+        ...,
+        "True if the retrieved documents are relevant to the question, False otherwise",
+    ]
 
-RETRIEVAL_PROMPT = """You are grading document relevance.
+# Grade prompt
+retrieval_relevance_instructions = """You are a teacher grading a quiz. You will be given a QUESTION and a set of FACTS provided by the student. Here is the grade criteria to follow:
+(1) You goal is to identify FACTS that are completely unrelated to the QUESTION
+(2) If the facts contain ANY keywords or semantic meaning related to the question, consider them relevant
+(3) It is OK if the facts have SOME information that is unrelated to the question as long as (2) is met
 
-Determine whether the retrieved FACTS are relevant
-to answering the QUESTION.
-"""
+Relevance:
+A relevance value of True means that the FACTS contain ANY keywords or semantic meaning related to the QUESTION and are therefore relevant.
+A relevance value of False means that the FACTS are completely unrelated to the QUESTION.
 
-retrieval_llm = ChatOpenAI(
-    model="gpt-4o",
-    temperature=0
-).with_structured_output(
-    RetrievalRelevanceGrade,
-    method="json_schema",
-    strict=True
-)
+Explain your reasoning in a step-by-step manner to ensure your reasoning and conclusion are correct. Avoid simply stating the correct answer at the outset."""
+
+# Grader LLM
+retrieval_relevance_llm = ChatOpenAI(
+    model="gpt-4o", temperature=0
+).with_structured_output(RetrievalRelevanceGrade, method="json_schema", strict=True)
 
 def retrieval_relevance(inputs: dict, outputs: dict) -> bool:
-    docs_text = "\n\n".join(doc.page_content for doc in outputs["documents"])
-
-    prompt = f"""
-QUESTION:
-{inputs['question']}
-
-FACTS:
-{docs_text}
-"""
-
-    grade = retrieval_llm.invoke([
-        {"role": "system", "content": RETRIEVAL_PROMPT},
-        {"role": "user", "content": prompt},
+    """An evaluator for document relevance"""
+    doc_string = "\n\n".join(doc.page_content for doc in outputs["documents"])
+    answer = f"FACTS: {doc_string}\nQUESTION: {inputs['question']}"
+    # Run evaluator
+    grade = retrieval_relevance_llm.invoke([
+        {"role": "system", "content": retrieval_relevance_instructions},
+        {"role": "user", "content": answer}
     ])
-
     return grade["relevant"]
-
 
 # ======================================================
 # RUN EVALUATION
@@ -191,3 +168,9 @@ client.evaluate(
     ],
     experiment_prefix="rag-full-eval",
 )
+
+# dataset format:
+# {
+#   "inputs": {"question": "..."},
+#   "outputs": {"answer": "..."}   # reference_outputs
+# }
