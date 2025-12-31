@@ -11,3 +11,11 @@ data_source:
   jsonified_data:
     volume_1: data\jsonified_data\volume_1.json
     volume_2: data\jsonified_data\volume_2.json
+
+#data chunking and embedding config
+chunking:
+  chunk_size: 1000
+  chunk_overlap: 250
+embedding:
+  embedding_model: "text-embedding-3-small"
+  vector_store_path: "data\vector_store"
