@@ -18,4 +18,4 @@ chunking:
   chunk_overlap: 250
 embedding:
   embedding_model: "text-embedding-3-small"
-  vector_store_path: "data\vector_store"
+  vector_store_path: "data\\vector_store"
