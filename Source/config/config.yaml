@@ -23,7 +23,7 @@ embedding:
 retriever:
   vector_store_path: "data/vector_store"
   search_type: "mmr"
-  k: 5
+  k: 3
 
 #LLM config
 llm:
