@@ -1,43 +1,116 @@
 import os
+import json
+from typing import List, Dict
 from dotenv import load_dotenv
+from langsmith import traceable
+from config.settings_loader import load_config
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
-from langsmith import traceable
-from config.settings_loader import load_config
+
+# ============================================================================
+# CONFIGURATION & INITIALIZATION
+# ============================================================================
 
 load_dotenv()
 config = load_config("config/config.yaml")
 
 os.environ["LANGCHAIN_TRACING_V2"] = "true"
-os.environ["LANGCHAIN_PROJECT"] = "graph-rag"
+os.environ["LANGCHAIN_PROJECT"] = "evaluation_roman_rag"
 
+# Initialize embeddings
 embeddings = OpenAIEmbeddings(
     model=config["embedding"]["embedding_model"],
     api_key=os.getenv("OPENAI_API_KEY")
 )
 
+# Load vector store
 loaded_vector_store = FAISS.load_local(
     config["retriever"]["vector_store_path"],
     embeddings,
     allow_dangerous_deserialization=True
 )
 
+# Initialize retriever
 retriever = loaded_vector_store.as_retriever(
     search_type=config["retriever"]["search_type"],
     search_kwargs={"k": config["retriever"]["k"]}
 )
 
+# Initialize LLM (global instance for reuse)
+llm = ChatOpenAI(
+    model=config["llm"]["model_name"],
+    api_key=os.getenv("OPENAI_API_KEY")
+)
+
+# ============================================================================
+# PROMPT TEMPLATE
+# ============================================================================
+
+SYSTEM_PROMPT = """You are a historical assistant specializing in the Roman Empire.
+
+Answer the question using ONLY information that is explicitly stated in the provided context.
+Ignore any context that does not directly help answer the question.
+
+Requirements:
+- Base every claim on concrete details from the context (e.g., practices, locations, roles, deployments).
+- Prefer specific examples over general statements.
+- Do NOT introduce people, events, or interpretations that are not clearly supported by the context.
+- Do NOT generalize beyond what the context shows.
+- Do NOT mention context numbers, the author, or phrases like "the text says".
+- Write a clear, factual paragraph that directly answers the question.
+
+Context:
+{context}
+
+Question:
+{question}
+
+Answer:"""
+
+prompt_template = PromptTemplate(
+    template=SYSTEM_PROMPT,
+    input_variables=["context", "question"]
+)
+
+# ============================================================================
+# UTILITY FUNCTIONS
+# ============================================================================
+
 def get_documents(query: str) -> str:
+    """Retrieve and format documents for a given query."""
     docs = retriever.invoke(query)
     context_parts = [f"[{i}] {doc.page_content}" for i, doc in enumerate(docs, 1)]
     return "\n\n".join(context_parts)
 
+def get_retrieval_context(query: str) -> List[str]:
+    """Retrieve documents as a list of strings."""
+    docs = retriever.invoke(query)
+    return [doc.page_content for doc in docs]
+
+# ============================================================================
+# RAG CHAIN
+# ============================================================================
+
+rag_chain = (
+    {
+        "context": lambda x: get_documents(x["question"]),
+        "question": RunnablePassthrough()
+    }
+    | prompt_template
+    | llm
+    | StrOutputParser()
+)
+
+# ============================================================================
+# CHAT FUNCTION
+# ============================================================================
+
 @traceable(
     run_type="chain",
-    name="RAG Pipeline",
+    name="RAG_Chat",
     metadata={
         "llm_model": config["llm"]["model_name"],
         "embedding_model": config["embedding"]["embedding_model"],
@@ -49,56 +122,33 @@ def get_documents(query: str) -> str:
     }
 )
 def chat(query: str) -> str:
-    # Initialize LLM
-    llm = ChatOpenAI(
-        model=config["llm"]["model_name"],
-        api_key=os.getenv("OPENAI_API_KEY")
-    )
-    
-    prompt = PromptTemplate(
-        template="""You are a historical assistant specializing in the Roman Empire.
-
-    Answer the question using ONLY information that is explicitly stated in the provided context.
-    Ignore any context that does not directly help answer the question.
-
-    Requirements:
-    - Base every claim on concrete details from the context (e.g., practices, locations, roles, deployments).
-    - Prefer specific examples over general statements.
-    - Do NOT introduce people, events, or interpretations that are not clearly supported by the context.
-    - Do NOT generalize beyond what the context shows.
-    - Do NOT mention context numbers, the author, or phrases like "the text says".
-    - Write a clear, factual paragraph that directly answers the question.
-
-    Context:
-    {context}
-
-    Question:
-    {question}
-
-    Answer:""",
-        input_variables=["context", "question"]
-    )
-
-    
-    rag_chain = (
-        {
-            "context": lambda x: get_documents(x["question"]),
-            "question": RunnablePassthrough()
-        }
-        | prompt
-        | llm
-        | StrOutputParser()
-    )
-    
+    """Generate answer for a single query using the RAG pipeline."""
     response = rag_chain.invoke({"question": query})
     return response
 
-import json
-from typing import List, Dict
+# ============================================================================
+# EVALUATION FUNCTION
+# ============================================================================
 
-def evaluate(jsonl_path: str, output_json_path: str = "evaluation/evaluation_results.json") -> List[Dict]:
+@traceable(
+    run_type="chain",
+    name="RAG_Evaluation",
+    metadata={
+        "llm_model": config["llm"]["model_name"],
+        "embedding_model": config["embedding"]["embedding_model"],
+        "chunk_size": config["chunking"]["chunk_size"],
+        "chunk_overlap": config["chunking"]["chunk_overlap"],
+        "search_type": config["retriever"]["search_type"],
+        "top_k": config["retriever"]["k"],
+        "vector_store": config["retriever"]["vector_store_path"]
+    }
+)
+def evaluate(
+    jsonl_path: str = None, 
+    output_json_path: str = None
+) -> List[Dict]:
     """
-    Reads a JSONL file, processes it through the RAG pipeline, and saves evaluation data to JSON.
+    Evaluate the RAG pipeline using ground truth data and save results as JSON.
     
     Args:
         jsonl_path: Path to the JSONL file containing ground truth data
@@ -113,51 +163,33 @@ def evaluate(jsonl_path: str, output_json_path: str = "evaluation/evaluation_res
             "retrieval_context": List[str]
         }
     """
+    # Use config defaults if not provided
+    if jsonl_path is None:
+        jsonl_path = config["evaluation"]["ground_truth_path"]
+    if output_json_path is None:
+        output_json_path = config["evaluation"]["output_path"]
+    
     evaluation_data = []
-    llm = ChatOpenAI(
-        model=config["llm"]["model_name"],
-        api_key=os.getenv("OPENAI_API_KEY")
-    )
-    prompt = PromptTemplate(
-        template="""You are a historical assistant specializing in the Roman Empire.
-
-    Answer the question using ONLY information that is explicitly stated in the provided context.
-    Ignore any context that does not directly help answer the question.
-
-    Requirements:
-    - Base every claim on concrete details from the context (e.g., practices, locations, roles, deployments).
-    - Prefer specific examples over general statements.
-    - Do NOT introduce people, events, or interpretations that are not clearly supported by the context.
-    - Do NOT generalize beyond what the context shows.
-    - Do NOT mention context numbers, the author, or phrases like "the text says".
-    - Write a clear, factual paragraph that directly answers the question.
-
-    Context:
-    {context}
-
-    Question:
-    {question}
-
-    Answer:""",
-        input_variables=["context", "question"]
-    )
-    rag_chain = (
-        {
-            "context": lambda x: get_documents(x["question"]),
-            "question": RunnablePassthrough()
-        }
-        | prompt
-        | llm
-        | StrOutputParser()
-    )
+    
+    print(f"Starting evaluation from {jsonl_path}...")
+    
     with open(jsonl_path, 'r', encoding='utf-8') as f:
-        for line in f:
+        for idx, line in enumerate(f, 1):
             item = json.loads(line.strip())
             question = item["inputs"]["question"]
-            docs = retriever.invoke(question)
-            retrieval_context = [doc.page_content for doc in docs]
+            
+            print(f"Processing question {idx}: {question[:80]}...")
+            
+            # Get retrieval context
+            retrieval_context = get_retrieval_context(question)
+            
+            # Get actual output from RAG chain
             actual_output = rag_chain.invoke({"question": question})
+            
+            # Expected output from ground truth
             expected_output = item["outputs"]["answer"]
+            
+            # Create evaluation data point
             eval_point = {
                 "input": question,
                 "actual_output": actual_output,
@@ -167,15 +199,19 @@ def evaluate(jsonl_path: str, output_json_path: str = "evaluation/evaluation_res
             evaluation_data.append(eval_point)
     
     # Save to JSON file
+    os.makedirs(os.path.dirname(output_json_path), exist_ok=True)
     with open(output_json_path, 'w', encoding='utf-8') as f:
         json.dump(evaluation_data, f, ensure_ascii=False, indent=2)
     
-    print(f"Evaluation results saved to {output_json_path}")
+    print(f"\n✓ Evaluation complete!")
+    print(f"✓ Processed {len(evaluation_data)} questions")
+    print(f"✓ Results saved to {output_json_path}")
+    
     return evaluation_data
 
+# ============================================================================
+# MAIN
+# ============================================================================
+
 if __name__ == "__main__":
-    eval_results = evaluate(
-        "evaluation/ground_truth/ground_truth.jsonl",
-        "evaluation/evaluation_results.json"
-    )
-    print(f"Processed {len(eval_results)} questions")
+    eval_results = evaluate(config["evaluation"]["ground_truth_path"], config["evaluation"]["output_path"])
