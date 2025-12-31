@@ -18,4 +18,9 @@ chunking:
   chunk_overlap: 250
 embedding:
   embedding_model: "text-embedding-3-small"
+
+#retriever config
+retriever:
   vector_store_path: "data/vector_store"
+  search_type: "mmr"
+  k: 5
