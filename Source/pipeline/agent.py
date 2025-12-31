@@ -13,7 +13,7 @@ from evaluation.deepeval_evaluation import RetrieverEvaluator
 
 
 class RAGAgent:
-    def __init__(self, vector_store,path,config_path: str = "config/config.yaml"):
+    def __init__(self, vector_store, path, config_path: str = "config/config.yaml"):
         load_dotenv()
         self.config = load_config(config_path)
         
@@ -21,13 +21,18 @@ class RAGAgent:
         os.environ["LANGCHAIN_PROJECT"] = "graph-rag-evaluation"
         
         self.path = path
+        self.vector_store = vector_store
         self.embeddings = None
-        self.vector_store = None
         self.retriever = None
         self.llm = None
         self.rag_chain = None
         self.prompt_template = None
-        self.vector_store=vector_store
+        
+        # Initialize paths
+        self.vector_store_path = os.path.join(self.path, "vector_store")
+        self.evaluation_path = os.path.join(self.path, "evaluation")
+        self.output_path = os.path.join(self.evaluation_path, "evaluation_output.json")
+        self.result_path = os.path.join(self.evaluation_path, "evaluation_result.csv")
         
         self._initialize_components()
     
@@ -112,7 +117,7 @@ class RAGAgent:
         if jsonl_path is None:
             jsonl_path = self.config["evaluation"]["ground_truth_path"]
         if output_json_path is None:
-            output_json_path = self.config["evaluation"]["output_path"]
+            output_json_path = self.output_path
         
         evaluation_data = []
         
@@ -126,16 +131,16 @@ class RAGAgent:
                 
                 eval_point = self.evaluate_single_question(question, expected_output, idx)
                 evaluation_data.append(eval_point)
-                
-        self.evaluation_path = os.path.join(self.path, "evaluation")
-        os.makedirs(os.path.dirname(self.evaluation_path), exist_ok=True)
-        self.output_path = os.path.join(self.evaluation_path, "evaluation_output.json")
-        self.result_path = os.path.join(self.evaluation_path, "evaluation_result.csv")
+        
+        # Create directory and save
+        os.makedirs(self.evaluation_path, exist_ok=True)
+        
         with open(self.output_path, 'w', encoding='utf-8') as f:
             json.dump(evaluation_data, f, ensure_ascii=False, indent=2)
         
         print(f"\n✓ Evaluation complete!")
         print(f"✓ Processed {len(evaluation_data)} questions")
+        print(f"✓ Saved to {self.output_path}")
 
         return evaluation_data
     
