@@ -15,7 +15,7 @@ load_dotenv()
 config = load_config("config/config.yaml")
 
 os.environ["LANGCHAIN_TRACING_V2"] = "true"
-os.environ["LANGCHAIN_PROJECT"] = "graph-rag-evaluation"
+os.environ["LANGCHAIN_PROJECT"] = "roman-rag-evaluation-450"
 
 embeddings = OpenAIEmbeddings(
     model=config["embedding"]["embedding_model"],

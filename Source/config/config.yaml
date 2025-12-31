@@ -23,7 +23,7 @@ embedding:
 retriever:
   vector_store_path: C:\vscode\graph-rag\Source\data\vector_store
   search_type: "mmr"
-  k: 15
+  k: 8
 
 #LLM config
 llm:
