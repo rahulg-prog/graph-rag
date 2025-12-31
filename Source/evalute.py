@@ -9,10 +9,7 @@ from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
-
-# ============================================================================
-# CONFIGURATION & INITIALIZATION
-# ============================================================================
+from Source.evaluation.deepeval_evaluation import RetrieverEvaluator
 
 load_dotenv()
 config = load_config("config/config.yaml")
@@ -20,34 +17,26 @@ config = load_config("config/config.yaml")
 os.environ["LANGCHAIN_TRACING_V2"] = "true"
 os.environ["LANGCHAIN_PROJECT"] = "graph-rag-evaluation"
 
-# Initialize embeddings
 embeddings = OpenAIEmbeddings(
     model=config["embedding"]["embedding_model"],
     api_key=os.getenv("OPENAI_API_KEY")
 )
 
-# Load vector store
 loaded_vector_store = FAISS.load_local(
     config["retriever"]["vector_store_path"],
     embeddings,
     allow_dangerous_deserialization=True
 )
 
-# Initialize retriever
 retriever = loaded_vector_store.as_retriever(
     search_type=config["retriever"]["search_type"],
     search_kwargs={"k": config["retriever"]["k"]}
 )
 
-# Initialize LLM
 llm = ChatOpenAI(
     model=config["llm"]["model_name"],
     api_key=os.getenv("OPENAI_API_KEY")
 )
-
-# ============================================================================
-# PROMPT TEMPLATE
-# ============================================================================
 
 SYSTEM_PROMPT = """You are a historical assistant specializing in the Roman Empire.
 
@@ -75,24 +64,14 @@ prompt_template = PromptTemplate(
     input_variables=["context", "question"]
 )
 
-# ============================================================================
-# UTILITY FUNCTIONS
-# ============================================================================
-
 def get_documents(query: str) -> str:
-    """Retrieve and format documents for a given query."""
     docs = retriever.invoke(query)
     context_parts = [f"[{i}] {doc.page_content}" for i, doc in enumerate(docs, 1)]
     return "\n\n".join(context_parts)
 
 def get_retrieval_context(query: str) -> List[str]:
-    """Retrieve documents as a list of strings."""
     docs = retriever.invoke(query)
     return [doc.page_content for doc in docs]
-
-# ============================================================================
-# RAG CHAIN
-# ============================================================================
 
 rag_chain = (
     {
@@ -104,35 +83,16 @@ rag_chain = (
     | StrOutputParser()
 )
 
-# ============================================================================
-# EVALUATION FUNCTIONS
-# ============================================================================
-
 @traceable(
     run_type="chain",
     name="Evaluate_Single_Question"
 )
 def evaluate_single_question(question: str, expected_output: str, question_idx: int) -> Dict:
-    """
-    Evaluate a single question through the RAG pipeline.
-    
-    Args:
-        question: The input question
-        expected_output: The ground truth answer
-        question_idx: Index of the question for tracking
-        
-    Returns:
-        Dictionary with evaluation data for this question
-    """
     print(f"Processing question {question_idx}: {question[:80]}...")
     
-    # Get retrieval context
     retrieval_context = get_retrieval_context(question)
-    
-    # Get actual output from RAG chain
     actual_output = rag_chain.invoke({"question": question})
     
-    # Create evaluation data point
     eval_point = {
         "input": question,
         "actual_output": actual_output,
@@ -147,17 +107,6 @@ def evaluate(
     jsonl_path: str = None, 
     output_json_path: str = None
 ) -> List[Dict]:
-    """
-    Evaluate the RAG pipeline using ground truth data and save results as JSON.
-    
-    Args:
-        jsonl_path: Path to the JSONL file containing ground truth data
-        output_json_path: Path where the evaluation results JSON will be saved
-        
-    Returns:
-        List of dictionaries with evaluation results
-    """
-    # Use config defaults if not provided
     if jsonl_path is None:
         jsonl_path = config["evaluation"]["ground_truth_path"]
     if output_json_path is None:
@@ -173,11 +122,9 @@ def evaluate(
             question = item["inputs"]["question"]
             expected_output = item["outputs"]["answer"]
             
-            # Each question runs as a separate trace
             eval_point = evaluate_single_question(question, expected_output, idx)
             evaluation_data.append(eval_point)
     
-    # Save to JSON file
     os.makedirs(os.path.dirname(output_json_path), exist_ok=True)
     with open(output_json_path, 'w', encoding='utf-8') as f:
         json.dump(evaluation_data, f, ensure_ascii=False, indent=2)
@@ -188,10 +135,5 @@ def evaluate(
     
     return evaluation_data
 
-# ============================================================================
-# MAIN
-# ============================================================================
-
 if __name__ == "__main__":
-    # Run evaluation
     eval_results = evaluate()
