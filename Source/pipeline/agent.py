@@ -13,19 +13,21 @@ from evaluation.deepeval_evaluation import RetrieverEvaluator
 
 
 class RAGAgent:
-    def __init__(self, config_path: str = "config/config.yaml"):
+    def __init__(self, vector_store,path,config_path: str = "config/config.yaml"):
         load_dotenv()
         self.config = load_config(config_path)
         
         os.environ["LANGCHAIN_TRACING_V2"] = "true"
         os.environ["LANGCHAIN_PROJECT"] = "graph-rag-evaluation"
         
+        self.path = path
         self.embeddings = None
         self.vector_store = None
         self.retriever = None
         self.llm = None
         self.rag_chain = None
         self.prompt_template = None
+        self.vector_store=vector_store
         
         self._initialize_components()
     
@@ -33,12 +35,6 @@ class RAGAgent:
         self.embeddings = OpenAIEmbeddings(
             model=self.config["embedding"]["embedding_model"],
             api_key=os.getenv("OPENAI_API_KEY")
-        )
-        
-        self.vector_store = FAISS.load_local(
-            self.config["retriever"]["vector_store_path"],
-            self.embeddings,
-            allow_dangerous_deserialization=True
         )
         
         self.retriever = self.vector_store.as_retriever(
@@ -53,25 +49,25 @@ class RAGAgent:
         
         system_prompt = """You are a historical assistant specializing in the Roman Empire.
 
-Answer the question using ONLY information that is explicitly stated in the provided context.
-Ignore any context that does not directly help answer the question.
+            Answer the question using ONLY information that is explicitly stated in the provided context.
+            Ignore any context that does not directly help answer the question.
 
-Requirements:
-- Base every claim on concrete details from the context (e.g., practices, locations, roles, deployments).
-- Prefer specific examples over general statements.
-- Do NOT introduce people, events, or interpretations that are not clearly supported by the context.
-- Do NOT generalize beyond what the context shows.
-- Do NOT mention context numbers, the author, or phrases like "the text says".
-- Write a clear, factual paragraph that directly answers the question.
+            Requirements:
+            - Base every claim on concrete details from the context (e.g., practices, locations, roles, deployments).
+            - Prefer specific examples over general statements.
+            - Do NOT introduce people, events, or interpretations that are not clearly supported by the context.
+            - Do NOT generalize beyond what the context shows.
+            - Do NOT mention context numbers, the author, or phrases like "the text says".
+            - Write a clear, factual paragraph that directly answers the question.
 
-Context:
-{context}
+            Context:
+            {context}
 
-Question:
-{question}
+            Question:
+            {question}
 
-Answer:"""
-        
+        Answer:"""
+                    
         self.prompt_template = PromptTemplate(
             template=system_prompt,
             input_variables=["context", "question"]
@@ -130,28 +126,26 @@ Answer:"""
                 
                 eval_point = self.evaluate_single_question(question, expected_output, idx)
                 evaluation_data.append(eval_point)
-        
-        os.makedirs(os.path.dirname(output_json_path), exist_ok=True)
-        with open(output_json_path, 'w', encoding='utf-8') as f:
+                
+        self.evaluation_path = os.path.join(self.path, "evaluation")
+        os.makedirs(os.path.dirname(self.evaluation_path), exist_ok=True)
+        self.output_path = os.path.join(self.evaluation_path, "evaluation_output.json")
+        self.result_path = os.path.join(self.evaluation_path, "evaluation_result.csv")
+        with open(self.output_path, 'w', encoding='utf-8') as f:
             json.dump(evaluation_data, f, ensure_ascii=False, indent=2)
         
         print(f"\n✓ Evaluation complete!")
         print(f"✓ Processed {len(evaluation_data)} questions")
-        print(f"✓ Results saved to {output_json_path}")
-        
+
         return evaluation_data
     
     def run_deepeval_metrics(self, json_path: str = None, csv_path: str = None):
-        if json_path is None:
-            json_path = self.config["evaluation"]["output_path"]
-        if csv_path is None:
-            csv_path = self.config["evaluation"]["evaluation_csv"]
         
-        with open(json_path, 'r', encoding='utf-8') as f:
+        with open(self.output_path, 'r', encoding='utf-8') as f:
             evaluation_data = json.load(f)
         
         print(f"\n🔍 Running DeepEval metrics on {len(evaluation_data)} questions...")
-        evaluator = RetrieverEvaluator(csv_path)
+        evaluator = RetrieverEvaluator(self.result_path)
         
         for idx, eval_point in enumerate(evaluation_data, 1):
             print(f"Evaluating with DeepEval {idx}/{len(evaluation_data)}...")
@@ -166,10 +160,7 @@ Answer:"""
 
 if __name__ == "__main__":
     agent = RAGAgent()
-    
     run_evaluation = False
-    
     if run_evaluation:
         agent.evaluate()
-    
     agent.run_deepeval_metrics()

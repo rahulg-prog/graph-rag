@@ -70,9 +70,19 @@ class DataEmbedding:
         api_key: str = None
     ):
         embedding_model = embedding_model or self.config["embedding"]["embedding_model"]
-        vector_store_path = vector_store_path or self.config["retriever"]["vector_store_path"]
-        api_key = api_key or os.getenv("OPENAI_API_KEY")
         
+        new_dir_name = f"chunk_size_{self.config['chunking']['chunk_size']}_chunk_overlap_{self.config['chunking']['chunk_overlap']}"
+
+        # Create the full path
+        base_path = r"C:\vscode\graph-rag\Source\data\iterations"
+        new_dir_path = os.path.join(base_path, new_dir_name)
+
+        # Actually create the directory
+        os.makedirs(new_dir_path, exist_ok=True)
+
+        vector_store_path = vector_store_path or new_dir_path  # Store directly in chunk_size_X_chunk_overlap_Y folder
+        api_key = api_key or os.getenv("OPENAI_API_KEY")
+                
         embeddings = OpenAIEmbeddings(
             model=embedding_model,
             api_key=api_key
@@ -84,7 +94,7 @@ class DataEmbedding:
         print(f"\nVector store created and saved to {vector_store_path}")
         print(f"Total vectors stored: {len(self.chunks)}")
         
-        return vector_store
+        return vector_store,new_dir_path
     
 if __name__ == "__main__":
     embedder = DataEmbedding()
