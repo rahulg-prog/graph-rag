@@ -56,8 +56,9 @@ def chat(query: str) -> str:
     )
     
     prompt = PromptTemplate(
-        template="""You are an author who is well versed with fall and decline of roman empire. Answer the question based solely on the provided context.
-        Use only relevant information from the context to answer the question and ignore the irrelevant parts. Do not mention the name of the 
+        template="""You are an helpful assistant who is well versed with fall and decline of roman empire. Answer the question based solely on the provided context.
+        Use only relevant information from the context to answer the question and ignore the irrelevant parts. 
+        Do not use anything like  authors perspective or the text says just provide the answer based on the context.
 
         Context:
         {context}

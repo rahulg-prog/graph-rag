@@ -27,4 +27,4 @@ retriever:
 
 #LLM config
 llm:
-  model_name: "gpt-4o-mini"
+  model_name: "gpt-4.1-nano"
