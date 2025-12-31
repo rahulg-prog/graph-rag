@@ -17,8 +17,8 @@ class RetrieverEvaluator:
             "contextual_precision": ContextualPrecisionMetric(), #retrieval evaluation
             "contextual_recall": ContextualRecallMetric(), #retrieval evaluation
             "contextual_relevancy": ContextualRelevancyMetric(), #retrieval evaluation
-            "answer_relevancy": AnswerRelevancyMetric(), #generation evaluation
-            "faithfulness": FaithfulnessMetric(), #generation evaluation
+            # "answer_relevancy": AnswerRelevancyMetric(), #generation evaluation
+            # "faithfulness": FaithfulnessMetric(), #generation evaluation
         }
 
         # Write CSV header
