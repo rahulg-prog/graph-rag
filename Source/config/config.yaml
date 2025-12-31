@@ -14,8 +14,8 @@ data_source:
 
 #data chunking and embedding config
 chunking:
-  chunk_size: 500
-  chunk_overlap: 75
+  chunk_size: 450
+  chunk_overlap: 30
 embedding:
   embedding_model: "text-embedding-3-small"
 
