@@ -17,7 +17,7 @@ embeddings = OpenAIEmbeddings(
 
 # Load FAISS vector store
 loaded_vector_store = FAISS.load_local(
-    config["retriever"]["vector_store_path"],
+    f"C:/vscode/graph-rag/Source/data/vector_store",
     embeddings,
     allow_dangerous_deserialization=True
 )
@@ -42,7 +42,7 @@ def chat(query: str) -> str:
     
     # Get relevant context from retrieved documents
     context = get_documents(query)
-    
+    print("Context:", context)
     # Create prompt template
     prompt = PromptTemplate(
         template="""You are a helpful assistant. Answer the question based solely on the provided context.
