@@ -5,6 +5,7 @@ from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
+from langsmith import traceable
 from config.settings_loader import load_config
 
 load_dotenv()
@@ -34,6 +35,19 @@ def get_documents(query: str) -> str:
     context_parts = [f"[{i}] {doc.page_content}" for i, doc in enumerate(docs, 1)]
     return "\n\n".join(context_parts)
 
+@traceable(
+    run_type="chain",
+    name="RAG Pipeline",
+    metadata={
+        "llm_model": config["llm"]["model_name"],
+        "embedding_model": config["embedding"]["embedding_model"],
+        "chunk_size": config["chunking"]["chunk_size"],
+        "chunk_overlap": config["chunking"]["chunk_overlap"],
+        "search_type": config["retriever"]["search_type"],
+        "top_k": config["retriever"]["k"],
+        "vector_store": "FAISS"
+    }
+)
 def chat(query: str) -> str:
     # Initialize LLM
     llm = ChatOpenAI(
@@ -42,8 +56,8 @@ def chat(query: str) -> str:
     )
     
     prompt = PromptTemplate(
-        template="""You are a helpful assistant. Answer the question based solely on the provided context.
-        Use only relevant information from the context to answer the question and ignore the irrelevant parts.
+        template="""You are an author who is well versed with fall and decline of roman empire. Answer the question based solely on the provided context.
+        Use only relevant information from the context to answer the question and ignore the irrelevant parts. Do not mention the name of the 
 
         Context:
         {context}

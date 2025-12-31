@@ -22,9 +22,9 @@ embedding:
 #retriever config
 retriever:
   vector_store_path: "data/vector_store"
-  search_type: "mmr"
-  k: 3
+  search_type: "similarity"
+  k: 5
 
 #LLM config
 llm:
-  model_name: "gpt-4o"
+  model_name: "gpt-4o-mini"
