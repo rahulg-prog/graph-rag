@@ -18,7 +18,7 @@ class RAGAgent:
         self.config = load_config(config_path)
         
         os.environ["LANGCHAIN_TRACING_V2"] = "true"
-        os.environ["LANGCHAIN_PROJECT"] = "graph-rag-evaluation"
+        os.environ["LANGCHAIN_PROJECT"] = f"cs_{self.config['chunking']['chunk_size']}_co_{self.config['chunking']['chunk_overlap']}_rag"
         
         self.path = path
         self.vector_store = vector_store
