@@ -83,6 +83,19 @@ class DataEmbedding:
 
         vector_store_path = vector_store_path or vector_store_dir
         api_key = api_key or os.getenv("OPENAI_API_KEY")
+        
+        # Check if vector store already exists
+        faiss_index_path = os.path.join(vector_store_path, "index.faiss")
+        if os.path.exists(faiss_index_path):
+            print(f"\nVector store already exists at {vector_store_path}")
+            print("Loading existing vector store...")
+            embeddings = OpenAIEmbeddings(
+                model=embedding_model,
+                api_key=api_key
+            )
+            vector_store = FAISS.load_local(vector_store_path, embeddings, allow_dangerous_deserialization=True)
+            print(f"Loaded existing vector store with {vector_store.index.ntotal} vectors")
+            return vector_store, new_dir_path
                 
         embeddings = OpenAIEmbeddings(
             model=embedding_model,
