@@ -1,1 +1,1 @@
-# graph-rag
+# rag
