@@ -14,8 +14,8 @@ data_source:
 
 #data chunking and embedding config
 chunking:
-  chunk_size: 1000
-  chunk_overlap: 100
+  chunk_size: 400
+  chunk_overlap: 40
 embedding:
   embedding_model: "text-embedding-3-small"
 
@@ -23,7 +23,7 @@ embedding:
 retriever:
   vector_store_path: C:\vscode\graph-rag\Source\data\vector_store
   search_type: "similarity"
-  k: 4
+  k: 6
 
 #LLM config
 llm:
