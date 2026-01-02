@@ -101,8 +101,20 @@ class RAGAgent:
     def evaluate_single_question(self, question: str, expected_output: str, question_idx: int) -> Dict:
         print(f"Processing question {question_idx}: {question[:80]}...")
         
-        retrieval_context = self._get_retrieval_context(question)
-        actual_output = self.rag_chain.invoke({"question": question})
+        # Retrieve documents once
+        docs = self.retriever.invoke(question)
+        retrieval_context = [doc.page_content for doc in docs]
+        
+        # Format context for RAG chain
+        context_parts = [f"[{i}] {doc.page_content}" for i, doc in enumerate(docs, 1)]
+        formatted_context = "\n\n".join(context_parts)
+        
+        # Generate answer using pre-retrieved context
+        actual_output = (
+            self.prompt_template 
+            | self.llm 
+            | StrOutputParser()
+        ).invoke({"context": formatted_context, "question": question})
         
         eval_point = {
             "input": question,
